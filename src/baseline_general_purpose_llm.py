@@ -6,7 +6,7 @@ import numpy as np
 import json
 import helper
 import tool_kit_help
-
+import tiktoken
 import asyncio
 from pydantic import BaseModel
 
@@ -14,11 +14,12 @@ class CrimeAmount(BaseModel):
   crime_amount: int
 
 class OllamaPredictor:
-    def __init__(self, model_name, seed, city_name, data_path=None):
+    def __init__(self, model_name, seed, city_name, offline = True, data_path=None):
         self.model_name = model_name
         self.seed = seed
         self.results = {}
         self.city_name = city_name
+        self.offline = offline
         if self.city_name in ['Dallas', 'Chicago', 'New York', 'San Francisco']:
             self.data = helper.default_data_loader(self.city_name)
         else:
@@ -30,12 +31,14 @@ class OllamaPredictor:
                     self.data = pickle.load(f)
         self.client = ollama.Client(host="http://localhost:11434") ## If need the update the local host address, please do.
 
-    
-    async def async_predict_batch(self, date, longitude, latitude):
+    async def async_predict_batch(self, date, offline, longitude, latitude):
         crime_task = asyncio.to_thread(
             tool_kit_help.fetch_crime_record,
             self.city_name,
-            date
+            date,
+            offline,
+            longitude,
+            latitude
         )
         weather_task = asyncio.to_thread(
             tool_kit_help.fetch_weather,
@@ -50,9 +53,14 @@ class OllamaPredictor:
     def predict(self):
 
         predictions = []
-        input_tokens = []
-        exec_times = []
+
+        input_token_counts = []
+        output_token_counts= []
+        total_token_counts = []
         true_pred_diff = []
+
+        encoder = helper.get_encoder(self.model_name)
+
         for date in self.data:
             for l in self.data[date]:
 
@@ -61,7 +69,7 @@ class OllamaPredictor:
                 success = False
                 
                 crime_data, weather_data = asyncio.run(
-                    self.async_predict_batch(date, l['coordinates'][0], l['coordinates'][1])
+                    self.async_predict_batch(date, self.offline, l['coordinates'][0], l['coordinates'][1])
                 )
                 
                 prompt_string = helper.prompt_loader(self.city_name).format(
@@ -77,7 +85,6 @@ class OllamaPredictor:
                 
                 while retry_count < max_retries and not success:
                     try:
-                        start_time = time.time()
                         # Single-turn completion
                         # Format prompt using fetched data
                         resp = self.client.generate(
@@ -85,10 +92,19 @@ class OllamaPredictor:
                             prompt=prompt_string,
                             options={"seed": self.seed},
                             format=CrimeAmount.model_json_schema(),)
-                        exec_time = time.time() - start_time
-
+                        
+                        # count tokens
+                        input_count  = len(encoder.encode(prompt_string))
+                        output_count = len(encoder.encode(resp.response))+len(encoder.encode(resp.thinking or "")) # add model name to output count
+                        total_count  = input_count + output_count
+                              
+                        input_token_counts.append(input_count)
+                        output_token_counts.append(output_count)
+                        total_token_counts.append(total_count)
+                        
                         pred = int(json.loads(resp.response)["crime_amount"])
-                        print(f'{date}, {(l['coordinates'][0],l['coordinates'][1])}: {pred}')
+                        if pred > 0:
+                            print(f'{date}, {(l['coordinates'][0],l['coordinates'][1])}: {pred}')
                         predictions.append(pred)
                         success = True
 
@@ -101,8 +117,6 @@ class OllamaPredictor:
                             print(f"Attempt {retry_count} failed, retrying...")
                             time.sleep(1)  # Add small delay between retries
             
-            input_tokens.append(len(prompt_string))
-            exec_times.append(exec_time)
             true_pred_diff.append(int(round(l['today_value'] - pred, 0))) ##
 
         self.results = {
@@ -110,15 +124,15 @@ class OllamaPredictor:
             'seed': self.seed,
             'rmse': np.sqrt(np.mean(np.square(true_pred_diff))),  # Calculate RMSE from differences
             'mae': np.mean(np.abs(true_pred_diff)),  # Calculate MAE from differences
-            'avg_input_tokens': np.mean(input_tokens),
-            'total_input_tokens': sum(input_tokens),
-            'avg_exec_time': np.mean(exec_times),
-            'total_exec_time': sum(exec_times),
+            'avg_input_tokens': np.mean(input_token_counts),
+            'avg_output_tokens': np.mean(output_token_counts),
+            'avg_total_tokens': np.mean(total_token_counts),
             
             'details': {
                 'predictions': predictions,
-                'input_tokens': input_tokens,
-                'execution_times': exec_times,
+                'input_tokens': input_token_counts,
+                'output_tokens': output_token_counts,
+                'total_tokens': total_token_counts,
                 'true_pred_differences': true_pred_diff
             }
         }
@@ -137,6 +151,7 @@ if __name__ == "__main__":
     parser.add_argument('--model', type=str, default='llama2', help='Model name to use')
     parser.add_argument('--city', type=str, default='Dallas', help='City name')
     parser.add_argument('--data_path', type=str, default='clean_data/dallads_crime_data.json', help='Path to data file')
+    parser.add_argument('--offline', default = True, help='Use offline mode for data fetching')
 
     args = parser.parse_args()
     print('successfully parsed arguments:', args)
@@ -151,6 +166,7 @@ if __name__ == "__main__":
             model_name=args.model,
             seed=rand_seed,
             city_name=args.city,
+            offline = args.offline,
             data_path=args.data_path
         )
         

@@ -4,6 +4,7 @@ import pandas as pd
 from sodapy import Socrata
 
 import config
+import helper
 
 def fetch_weather(longitude, latitude, start_date, end_date=None, radius_km = 5.5, max_stations = 5, max_retries=3, level='daily', timezone='US/Central'):
     start_date = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
@@ -44,29 +45,32 @@ def fetch_weather(longitude, latitude, start_date, end_date=None, radius_km = 5.
     return {}
 
 
-def fetch_crime_record(city_name, date):
+def fetch_crime_record(city_name, date, offline=True, lat_bin=None, lon_bin=None):
     
-    if city_name == 'Dallas':
-    
-        client = Socrata(config.DPD_API_URL, None)
-        print(f"Successfully connected to API at {config.DPD_API_URL}")
+    if city_name.lower() == 'dallas':
+        if offline:
+            return helper.offline_record_loader(city_name, date, lon_bin, lat_bin)
         
-        # Get previous day in Dallas time
-        date_filter = f"""date1 between '{(datetime.datetime.strptime(date, "%Y-%m-%d") - datetime.timedelta(days=14)).strftime('%Y-%m-%d')} 00:00:00.0000000' and '{date} 00:00:00.0000000'"""
+        else:
+            client = Socrata(config.DPD_API_URL, None)
+            print(f"Successfully connected to API at {config.DPD_API_URL}")
+            
+            # Get previous day in Dallas time
+            date_filter = f"""date1 between '{(datetime.datetime.strptime(date, "%Y-%m-%d") - datetime.timedelta(days=14)).strftime('%Y-%m-%d')} 00:00:00.0000000' and '{date} 00:00:00.0000000'"""
+            
+            results = client.get(config.DPD_DATASET_ID, where=date_filter, limit = 20000)
+            results_df = pd.DataFrame.from_records(results)
+            
+            print("Data columns:", results_df.columns.tolist())
+            print("Sample data:", results_df.head(1).to_dict())
         
-        results = client.get(config.DPD_DATASET_ID, where=date_filter, limit = 20000)
-        results_df = pd.DataFrame.from_records(results)
-        
-        print("Data columns:", results_df.columns.tolist())
-        print("Sample data:", results_df.head(1).to_dict())
-        
-        if results_df.empty:
-            print("Warning: No data found for the date")
-            return pd.DataFrame({
-                'geocoded_column': [],
-                'date1': [],
-                'incidentnum': [],
-                'Location1': []
-            })
+            if not results_df:
+                print("Warning: No data found for the date")
+                return pd.DataFrame({
+                    'geocoded_column': [],
+                    'date1': [],
+                    'incidentnum': [],
+                    'Location1': []
+                })
         
     return results_df
