@@ -145,7 +145,7 @@ if __name__ == "__main__":
     rand_seed = random.randint(1, 1000)
     results = []
     
-    for i in range(2):  # Using fixed 2 runs
+    for i in range(3):  # Using fixed 2 runs
         print(f"Run {i+1} with seed {rand_seed} for city {args.city} using model {args.model}")
         predictor = OllamaPredictor(
             model_name=args.model,
