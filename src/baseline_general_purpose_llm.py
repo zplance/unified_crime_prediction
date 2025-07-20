@@ -1,14 +1,18 @@
-import pickle
-
-import ollama
-import time
-import numpy as np
+import asyncio
 import json
+import logging
+import ollama
+import pickle
+import tiktoken
+import time
+
+import numpy as np
+from pathlib import Path
+from pydantic import BaseModel
+
 import helper
 import tool_kit_help
-import tiktoken
-import asyncio
-from pydantic import BaseModel
+
 
 class CrimeAmount(BaseModel):
   crime_amount: int
@@ -30,7 +34,7 @@ class OllamaPredictor:
                 with open(data_path, 'rb') as f:
                     self.data = pickle.load(f)
         self.client = ollama.Client(host="http://localhost:11434") ## If need the update the local host address, please do.
-
+        
     async def async_predict_batch(self, date, offline, longitude, latitude):
         crime_task = asyncio.to_thread(
             tool_kit_help.fetch_crime_record,
@@ -46,7 +50,6 @@ class OllamaPredictor:
             latitude=latitude,
             start_date=date
         )
-
         crime_data, weather_data = await asyncio.gather(crime_task, weather_task)
         return crime_data, weather_data
     
@@ -60,7 +63,7 @@ class OllamaPredictor:
         true_pred_diff = []
 
         encoder = helper.get_encoder(self.model_name)
-
+        logger.info("Starting prediction loop — %d dates to process", len(self.data))
         for date in self.data:
             for l in self.data[date]:
 
@@ -143,14 +146,31 @@ class OllamaPredictor:
 
 if __name__ == "__main__":
     print('Starting crime prediction using Ollama...')
-    import random
     import argparse
+    import logging
+    import random
+    import time
     from pathlib import Path
 
     # Folder that holds THIS source file (…/workspace/src)
     SRC_DIR = Path(__file__).resolve().parent
     # One level up (…/workspace)
     ROOT_DIR = SRC_DIR.parent
+
+    RUN_STAMP = time.strftime("%Y%m%d_%H%M%S")          # e.g. 20250720_143022
+    LOG_DIR   = ROOT_DIR / "logs"
+    LOG_DIR.mkdir(exist_ok=True)
+
+    LOG_FILE  = LOG_DIR / f"crime_predict_{RUN_STAMP}.txt"   # one file per script run
+
+    logging.basicConfig(
+        level=logging.INFO,                               # or DEBUG if you like
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        filename=LOG_FILE,
+        filemode="w"                                      # always start fresh
+    )
+    logger = logging.getLogger(__name__)
+    logger.info("Log file created at %s", LOG_FILE)
 
     # Set up argument parser
     parser = argparse.ArgumentParser(description='Run crime predictions using Ollama')
