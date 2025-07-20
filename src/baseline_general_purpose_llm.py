@@ -145,6 +145,12 @@ if __name__ == "__main__":
     print('Starting crime prediction using Ollama...')
     import random
     import argparse
+    from pathlib import Path
+
+    # Folder that holds THIS source file (…/workspace/src)
+    SRC_DIR = Path(__file__).resolve().parent
+    # One level up (…/workspace)
+    ROOT_DIR = SRC_DIR.parent
 
     # Set up argument parser
     parser = argparse.ArgumentParser(description='Run crime predictions using Ollama')
@@ -186,7 +192,7 @@ if __name__ == "__main__":
     print(f"Mean MAE: {mean_mae:.2f}")
 
     # Save results to JSON file
-    output_path = f'results/{args.city}_{args.model}_predictions.json'
+    output_path = output_path = ROOT_DIR / 'results/{args.city}_{args.model}_predictions.json'
     with open(output_path, 'w') as f:
         json.dump(results, f, indent=4)
     print("Prediction completed and results saved.")
