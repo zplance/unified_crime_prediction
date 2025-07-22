@@ -5,6 +5,7 @@ import ollama
 import pickle
 import tiktoken
 import time
+import datetime
 
 import numpy as np
 from pathlib import Path
@@ -35,6 +36,9 @@ class OllamaPredictor:
                     self.data = pickle.load(f)
         self.client = ollama.Client(host="http://localhost:11434") ## If need the update the local host address, please do.
         
+        # Create logger for this instance
+        self.logger = logging.getLogger(__name__)
+        
     async def async_predict_batch(self, date, offline, longitude, latitude):
         crime_task = asyncio.to_thread(
             tool_kit_help.fetch_crime_record,
@@ -63,13 +67,22 @@ class OllamaPredictor:
         true_pred_diff = []
 
         encoder = helper.get_encoder(self.model_name)
-        logger.info("Starting prediction loop — %d dates to process", len(self.data))
-        for date in self.data:
+        self.logger.info("Starting prediction loop — %d dates to process", len(self.data))
+        
+        start_test = datetime.date(2025, 1, 1)
+        end_test   = datetime.date(2025, 1, 4)
+        test_dates = [
+            d for d in self.data.keys()
+            if start_test <= datetime.date.fromisoformat(d) <= end_test
+        ]
+        
+        for date in test_dates:
             for l in self.data[date]:
 
                 max_retries = 3
                 retry_count = 0
                 success = False
+                pred = 0  # Initialize pred with default value
                 
                 crime_data, weather_data = asyncio.run(
                     self.async_predict_batch(date, self.offline, l['coordinates'][0], l['coordinates'][1])
@@ -114,13 +127,15 @@ class OllamaPredictor:
                     except (ValueError, KeyError) as e:
                         retry_count += 1
                         if retry_count == max_retries:
-                            predictions.append(0.0)
-                            print(f"Failed after {max_retries} attempts, using default value 0.0")
+                            pred = 0  # Set default value for failed prediction
+                            predictions.append(pred)
+                            print(f"Failed after {max_retries} attempts, using default value 0")
                         else:
                             print(f"Attempt {retry_count} failed, retrying...")
                             time.sleep(1)  # Add small delay between retries
-            
-            true_pred_diff.append(int(round(l['today_value'] - pred, 0))) ##
+                
+                # Calculate difference for this location (moved inside the location loop)
+                true_pred_diff.append(int(round(l['today_value'] - pred, 0)))
 
         self.results = {
             'model_name': self.model_name,
@@ -186,7 +201,7 @@ if __name__ == "__main__":
     rand_seed = random.randint(1, 1000)
     results = []
     
-    for i in range(3):  # Using fixed 2 runs
+    for i in range(2):  # Using fixed 3 runs
         print(f"Run {i+1} with seed {rand_seed} for city {args.city} using model {args.model}")
         predictor = OllamaPredictor(
             model_name=args.model,
@@ -211,8 +226,12 @@ if __name__ == "__main__":
     print(f"Mean RMSE: {mean_rmse:.2f}")
     print(f"Mean MAE: {mean_mae:.2f}")
 
-    # Save results to JSON file
-    output_path = output_path = ROOT_DIR / 'results/{args.city}_{args.model}_predictions.json'
+    # Create results directory if it doesn't exist
+    results_dir = ROOT_DIR / "results"
+    results_dir.mkdir(exist_ok=True)
+    
+    # Save results to JSON file (fixed path formatting)
+    output_path = results_dir / f"{args.city}_{args.model}_predictions.json"
     with open(output_path, 'w') as f:
         json.dump(results, f, indent=4)
     print("Prediction completed and results saved.")
