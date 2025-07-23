@@ -332,7 +332,7 @@ if __name__ == "__main__":
             print("No valid checkpoints found for calculation.")
         exit()
 
-    rand_seed = random.randint(1, 1000)
+    rand_seed = random.randint(1, 10000)
     num_runs = 3
     
     # Load existing checkpoints if resuming
@@ -345,7 +345,7 @@ if __name__ == "__main__":
     results = []
     
     for i in range(num_runs):
-        rand_seed = random.randint(1, 1000)
+        rand_seed = random.randint(1, 10000)
         run_number = i + 1
         
         # Skip if checkpoint already exists and we're resuming
