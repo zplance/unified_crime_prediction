@@ -76,16 +76,16 @@ class OllamaPredictor:
         true_pred_diff = []
 
         encoder = helper.get_encoder(self.model_name)
-        self.logger.info("Starting prediction loop — %d dates to process", len(self.data))
+        # self.logger.info("Starting prediction loop — %d dates to process", len(self.data))
         
-        start_test = datetime.date(2025, 1, 1)
-        end_test   = datetime.date(2025, 1, 2)
-        test_dates = [
-            d for d in self.data.keys()
-            if start_test <= datetime.date.fromisoformat(d) <= end_test
-        ]
+        # start_test = datetime.date(2025, 1, 1)
+        # end_test   = datetime.date(2025, 1, 2)
+        # test_dates = [
+        #     d for d in self.data.keys()
+        #     if start_test <= datetime.date.fromisoformat(d) <= end_test
+        # ]
         
-        for date in test_dates:
+        for date in self.data:
             for l in self.data[date]:
 
                 max_retries = 10  # Increased from 3 to 10
@@ -345,6 +345,7 @@ if __name__ == "__main__":
     results = []
     
     for i in range(num_runs):
+        rand_seed = random.randint(1, 1000)
         run_number = i + 1
         
         # Skip if checkpoint already exists and we're resuming
