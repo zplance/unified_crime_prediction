@@ -344,8 +344,10 @@ if __name__ == "__main__":
     
     results = []
     
+    rand_seed_set = [6177,3186, 6889]  # Fixed seeds for reproducibility, can be randomized if needed
+    
     for i in range(num_runs):
-        rand_seed = random.randint(1, 10000)
+        rand_seed = rand_seed_set[i]  # Use the fixed seed for each runs
         run_number = i + 1
         
         # Skip if checkpoint already exists and we're resuming
