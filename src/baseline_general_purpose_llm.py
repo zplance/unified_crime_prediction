@@ -78,14 +78,14 @@ class OllamaPredictor:
         encoder = helper.get_encoder(self.model_name)
         # self.logger.info("Starting prediction loop — %d dates to process", len(self.data))
         
-        # start_test = datetime.date(2025, 1, 1)
-        # end_test   = datetime.date(2025, 1, 2)
-        # test_dates = [
-        #     d for d in self.data.keys()
-        #     if start_test <= datetime.date.fromisoformat(d) <= end_test
-        # ]
+        start_test = datetime.date(2025, 1, 1)
+        end_test   = datetime.date(2025, 3, 31)
+        test_dates = [
+            d for d in self.data.keys()
+            if start_test <= datetime.date.fromisoformat(d) <= end_test
+        ]
         
-        for date in self.data:
+        for date in test_dates:
             for l in self.data[date]:
 
                 max_retries = 10  # Increased from 3 to 10
